@@ -125,6 +125,15 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
         require(realityToken.transfer(msg.sender, winnings, branchForWithdraw));
         emit WinningsRedemption(msg.sender, winnings, branchForWithdraw);
     }
+    /// @dev Risky operation, deletes data and can safe gas in combination with other function calls
+    /// @return free gas
+    function clearData()
+    public{
+        delete outcomeTokensCountShort[msg.sender];
+        delete outcomeTokensCountLong[msg.sender];
+        delete branchesUsedForWithdraw[msg.sender];
+    }
+    
 
     /// @dev Calculates and returns event hash
     /// @return Event hash
