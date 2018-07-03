@@ -24,5 +24,11 @@
   "bugs": {
     "url": "https://github.com/josojo/subjectivocracy/issues"
   },
-  "homepage": "https://github.com/josojo/subjectivocracy#readme"
+  "dependencies": {
+    "@digix/tempo": "^0.2.0",
+    "@gnosis.pm/pm-contracts": "^1.0.4",
+    "@gnosis.pm/util-contracts": "^0.2.10",
+    "@josojo/realitycheck-contracts": "^0.2.0",
+    "@josojo/realitytoken-contracts": "^0.1.0"
+  }
 }
