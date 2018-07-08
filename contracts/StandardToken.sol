@@ -9,6 +9,10 @@ contract StandardTokenData {
     /*
      *  Storage
      */
+    string public  name = "Token Name";
+    string public symbol = "SYM";
+    uint8 public constant decimals = 18;  
+
     mapping (address => uint) balances;
     mapping (address => mapping (address => uint)) allowances;
     uint totalTokens;

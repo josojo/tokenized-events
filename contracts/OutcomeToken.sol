@@ -14,7 +14,6 @@ contract OutcomeTokenData {
      *  Storage
      */
     address public eventContract;
-
     /*
      *  Modifiers
      */
@@ -28,10 +27,12 @@ contract OutcomeTokenData {
 contract OutcomeTokenProxy is Proxy, StandardTokenData, OutcomeTokenData {
 
     /// @dev Constructor sets events contract address
-    constructor(address proxied)
+    constructor(address proxied, string _symbol, string _name)
         Proxy(proxied)
         public
     {
+        name = _name;
+        symbol = _symbol;
         eventContract = msg.sender;
     }
 }

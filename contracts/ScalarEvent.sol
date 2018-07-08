@@ -58,11 +58,15 @@ contract ScalarEventProxy is Proxy, EventData, ScalarEventData {
         questionId = _questionId;
         realityCheck = _realityCheck;
         // Create an outcome token for each outcome
-        for (uint8 i = 0; i < 2; i++) {
-            OutcomeToken outcomeToken = OutcomeToken(new OutcomeTokenProxy(outcomeTokenMasterCopy));
-            outcomeTokens.push(outcomeToken);
-            emit OutcomeTokenCreation(outcomeToken, i);
-        }
+        // Create LongTokens    
+        OutcomeToken outcomeToken = OutcomeToken(new OutcomeTokenProxy(outcomeTokenMasterCopy, "LONG", string(abi.encodePacked("Long Token for Event ", questionId))));
+        outcomeTokens.push(outcomeToken);
+        emit OutcomeTokenCreation(outcomeToken, 1);
+        //create ShortTokens
+        outcomeToken = OutcomeToken(new OutcomeTokenProxy(outcomeTokenMasterCopy, "SHRT", string(abi.encodePacked("Short Token for Event ", questionId))));
+        outcomeTokens.push(outcomeToken);
+        emit OutcomeTokenCreation(outcomeToken, 2);
+            
     
         // Validate bounds
         require(_upperBound > _lowerBound);
@@ -119,12 +123,12 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
         uint longOutcomeTokenCount = outcomeTokensCountLong[msg.sender];
         winnings = shortOutcomeTokenCount.mul(factorShort).add(longOutcomeTokenCount.mul(factorLong)) / OUTCOME_RANGE;
         // Revoke all outcome tokens
-
-
         // Payout winnings to sender
         require(realityToken.transfer(msg.sender, winnings, branchForWithdraw));
         emit WinningsRedemption(msg.sender, winnings, branchForWithdraw);
     }
+
+
     /// @dev Risky operation, deletes data and can safe gas in combination with other function calls
     /// @return free gas
     function clearData()
@@ -150,7 +154,6 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
     function eligibleBranchForWithdraw(bytes32 branchForWithdraw, bytes32 depositBranch, address _for)
     public view returns(bool)
     {
-        
         // check that tokens were not yet withdrawn in inbetween branches
         for(uint i=0;i < branchesUsedForWithdraw[_for].length;i++) {
             if(realityToken.isBranchInBetweenBranches(branchesUsedForWithdraw[_for][i], depositBranch, branchForWithdraw))

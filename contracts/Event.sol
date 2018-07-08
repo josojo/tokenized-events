@@ -69,9 +69,10 @@ contract Event is EventData {
     /// @param branch is the branch on which a user wants to know the result
     function getOutcome(bytes32 branch)
         public
+        view
         returns (int outcome)
     {
-          outcome = int(realityCheck.getFinalAnswer(questionId, branch));
+          outcome = int(realityCheck.getFinalAnswer(branch, questionId));
     }
 
     /// @dev Returns outcome count
@@ -106,11 +107,4 @@ contract Event is EventData {
             outcomeTokenDistribution[i] = outcomeTokens[i].balanceOf(owner);
     }
 
-    /// @dev Calculates and returns event hash
-    /// @return Event hash
-    function getEventHash() public view returns (bytes32);
-
-    /// @dev Exchanges sender's winning outcome tokens for collateral tokens
-    /// @return Sender's winnings
-    function redeemWinnings() public returns (uint);
 }
