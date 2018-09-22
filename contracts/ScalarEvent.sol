@@ -2,8 +2,8 @@ pragma solidity ^0.4.24;
 import "./Event.sol";
 import "./Proxy.sol";
 
-import "@josojo/realitytoken-contracts/contracts/RealityToken.sol";
-import "@josojo/realitycheck-contracts/contracts/RealityCheck.sol";
+import "@josojo/forkonomics-contracts/contracts/ForkonomicsInterface.sol";
+import "@josojo/forkonomics-contracts/contracts/RealityCheck.sol";
 
 contract ScalarEventData {
 
@@ -38,11 +38,15 @@ contract ScalarEventProxy is Proxy, EventData, ScalarEventData {
     /// @param _upperBound Lower bound for event outcome
     constructor(
         address proxied,
-        RealityToken _realityToken,
+        ForkonomicToken _forkonomicToken,
         RealityCheck _realityCheck,
         address outcomeTokenMasterCopy,
         bytes32 _collateralBranch,
-        bytes32 _questionId,
+        string question,
+        uint32 opening_ts,
+        uint32  min_timeout,
+        uint8 template_id,
+        address arbitrator,
         int _lowerBound,
         int _upperBound
     )
@@ -50,13 +54,19 @@ contract ScalarEventProxy is Proxy, EventData, ScalarEventData {
         public
     {
         // Validate input
-        require(address(_realityToken) != 0 && address(_realityCheck) != 0);
+        require(address(_forkonomicToken) != 0 && address(_realityCheck) != 0);
         require(_collateralBranch != bytes32(0));
 
-        realityToken = _realityToken;
+        forkonomicToken = _forkonomicToken;
         collateralBranch = _collateralBranch;
-        questionId = _questionId;
+
+
+        // create question in relaityCheck
+        bytes32 content_hash = keccak256(abi.encodePacked(template_id, opening_ts, question));  
         realityCheck = _realityCheck;
+        questionId = realityCheck.askQuestion(0, question, arbitrator, min_timeout, opening_ts, 0);
+
+
         // Create an outcome token for each outcome
         // Create LongTokens    
         OutcomeToken outcomeToken = OutcomeToken(new OutcomeTokenProxy(outcomeTokenMasterCopy, "LONG", string(abi.encodePacked("Long Token for Event ", questionId))));
@@ -84,6 +94,9 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
      *  Public functions
      */
 
+    bytes32 constant NULL_HASH = "";
+    address constant NULL_ADDRESS = 0x0;
+
     function revokeOutcomeTokens()
         public
         {
@@ -100,13 +113,12 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
         } 
     /// @dev Exchanges sender's winning outcome tokens for collateral tokens
     /// @return Sender's winnings
-    function redeemWinnings(bytes32 branchForWithdraw)
+    function redeemWinnings(bytes32 branchForWithdraw, address arbitrator)
         public
         returns (uint winnings)
     {
-       require(eligibleBranchForWithdraw(branchForWithdraw, collateralBranch, msg.sender));
-        branchesUsedForWithdraw[msg.sender].push(branchForWithdraw);
-        int outcome = getOutcome(branchForWithdraw);
+
+        int outcome = getOutcome(branchForWithdraw, arbitrator);
         // Outcome is lower than defined lower bound
         uint convertedWinningOutcome = 0;
         if (outcome < lowerBound)
@@ -123,8 +135,12 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
         uint longOutcomeTokenCount = outcomeTokensCountLong[msg.sender];
         winnings = shortOutcomeTokenCount.mul(factorShort).add(longOutcomeTokenCount.mul(factorLong)) / OUTCOME_RANGE;
         // Revoke all outcome tokens
+
         // Payout winnings to sender
-        require(realityToken.transfer(msg.sender, winnings, branchForWithdraw));
+        require(!ForkonomicsInterface(forkonomicToken).hasBoxWithdrawal(msg.sender, NULL_HASH, branchForWithdraw, collateralBranch)); 
+        require(ForkonomicsInterface(forkonomicToken).boxTransfer( msg.sender, winnings, branchForWithdraw, NULL_HASH, NULL_HASH));
+        ForkonomicsInterface(forkonomicToken).recordBoxWithdrawal(NULL_HASH, winnings, branchForWithdraw);
+           
         emit WinningsRedemption(msg.sender, winnings, branchForWithdraw);
     }
 
@@ -147,27 +163,6 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
         returns (bytes32)
     {
         return keccak256(abi.encodePacked(collateralBranch, questionId, lowerBound, upperBound));
-    }
-
-    // @dev: this function checks whether a branch is eligigble for a withdraw. 
-    // if there is a closer parentbranch that the branchFromPreviousWithdraw we throw as well
-    function eligibleBranchForWithdraw(bytes32 branchForWithdraw, bytes32 depositBranch, address _for)
-    public view returns(bool)
-    {
-        // check that tokens were not yet withdrawn in inbetween branches
-        for(uint i=0;i < branchesUsedForWithdraw[_for].length;i++) {
-            if(realityToken.isBranchInBetweenBranches(branchesUsedForWithdraw[_for][i], depositBranch, branchForWithdraw))
-                return false;   
-            }
-        
-        // check that tokens will be withdrawn on a child branch of branch of question
-        bytes32 branchParent = branchForWithdraw;
-        while(branchParent != depositBranch){
-            branchParent = realityToken.getParentBranch(branchParent);
-            if(branchParent == bytes32(0))
-                return false;
-        }
-        return true;
     }
 
 }

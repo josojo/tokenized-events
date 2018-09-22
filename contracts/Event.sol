@@ -2,8 +2,9 @@ pragma solidity ^0.4.24;
 import "@gnosis.pm/pm-contracts/contracts/Tokens/Token.sol";
 import "./OutcomeToken.sol";
 import "./Proxy.sol";
-import "@josojo/realitytoken-contracts/contracts/RealityToken.sol";
-import "@josojo/realitycheck-contracts/contracts/RealityCheck.sol";
+import "@josojo/forkonomics-contracts/contracts/ForkonomicToken.sol";
+import "@josojo/forkonomics-contracts/contracts/ForkonomicsInterface.sol";
+import "@josojo/forkonomics-contracts/contracts/RealityCheck.sol";
 
 
 contract EventData {
@@ -22,9 +23,14 @@ contract EventData {
     OutcomeToken[] public outcomeTokens;
 
 
-    RealityToken public realityToken;
+    ForkonomicToken public forkonomicToken;
+    ForkonomicSystem public fSystem;
     bytes32 public collateralBranch;
     bytes32 public questionId;
+    bytes32 public content_hash;
+    uint256 public min_bond = 50000000000000000;
+    uint32 public min_timeout= (1 days);
+    uint256 public opening_ts;
     RealityCheck realityCheck;
 
 
@@ -44,11 +50,11 @@ contract Event is EventData {
         public
     {
         // Transfer collateral tokens to events contract
-        require(realityToken.transferFrom(msg.sender, this, collateralTokenCount, collateralBranch));
+        require(forkonomicToken.transferFrom(msg.sender, this, collateralTokenCount, collateralBranch));
         // Issue new outcome tokens to sender
         for (uint8 i = 0; i < outcomeTokens.length; i++)
             outcomeTokens[i].issue(msg.sender, collateralTokenCount);
-        OutcomeTokenSetIssuance(msg.sender, collateralTokenCount);
+        emit OutcomeTokenSetIssuance(msg.sender, collateralTokenCount);
     }
 
     /// @dev Sells equal number of tokens of all outcomes, exchanging collateral tokens and sets of outcome tokens 1:1
@@ -60,19 +66,27 @@ contract Event is EventData {
         for (uint8 i = 0; i < outcomeTokens.length; i++)
             outcomeTokens[i].revoke(msg.sender, outcomeTokenCount);
         // Transfer collateral tokens to sender
-        require(realityToken.transfer(msg.sender, outcomeTokenCount, collateralBranch));
-        OutcomeTokenSetRevocation(msg.sender, outcomeTokenCount);
+        require(forkonomicToken.transfer(msg.sender, outcomeTokenCount, collateralBranch));
+        emit OutcomeTokenSetRevocation(msg.sender, outcomeTokenCount);
     }
 
  
     /// @dev gets winning event outcome
     /// @param branch is the branch on which a user wants to know the result
-    function getOutcome(bytes32 branch)
+    function getOutcome(bytes32 branch, address arbitrator)
         public
         view
         returns (int outcome)
     {
-          outcome = int(realityCheck.getFinalAnswer(branch, questionId));
+
+        // check that original branch is a father of executionbranch:
+        require(fSystem.isFatherOfBranch(collateralBranch, branch));
+
+         // ensure that arbitrator is white-listed
+        require(fSystem.isArbitratorWhitelisted(arbitrator, branch));
+   
+        outcome = int(realityCheck.getFinalAnswerIfMatches(questionId, content_hash, arbitrator, min_timeout, opening_ts));
+
     }
 
     /// @dev Returns outcome count
