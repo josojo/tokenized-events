@@ -1,18 +1,49 @@
-var RealityCheck = artifacts.require("@josojo/realitycheck-contracts/contracts/RealityCheck.sol");
-var ArbitratorData = artifacts.require("@josojo/realitytoken-contracts/contracts/ArbitratorData.sol");
-var ArbitratorList = artifacts.require("@josojo/realitytoken-contracts/contracts/ArbitratorList.sol");
-var RealityToken = artifacts.require("@josojo/realitytoken-contracts/contracts/RealityToken.sol");
-var InitialDistribution= artifacts.require("@josojo/realitytoken-contracts/contracts/Distribution.sol");
+var ForkonomicSystem = artifacts.require("./ForkonomicSystem.sol");
+var RealityCheck = artifacts.require("./RealityCheck.sol");
+
+var ForkonomicToken = artifacts.require("./ForkonomicToken.sol")
+var Distribution= artifacts.require("./Distribution.sol");
+var ForkonomicETTF = artifacts.require("./ForkonomicETTF.sol")
 var Math = artifacts.require("./Math")
-var SclarEvent = artifacts.require("./ScalarEvent")
+var ScalarEvent = artifacts.require("./ScalarEvent")
+var ScalarEventProxy = artifacts.require("ScalarEventProxy")
 var OutcomeToken = artifacts.require("./OutcomeToken")
+var LMSRMarketMaker = artifacts.require("LMSRMarketMaker")
+var StandardMarket = artifacts.require("StandardMarket")
+
 const feeForRealityToken = 100
+const question ="How many points will the DOW JONES - divided by the RealityToken price - notate on the 1.1.2019  00:00:00?";
+const openingTs = 18462972000; // date -d '1/1/2019 00:00:00' +"%s"
+const timeout = 60*60*24  // one day
+const templateId = 1 //asking for an uint
+const minBound = 1000
+const maxBound = 100000
 
 module.exports = function(deployer, network, accounts) {
-    deployer.deploy(RealityToken)
-  	.then(()=> deployer.deploy(RealityCheck, RealityToken.address, feeForRealityToken))
+    deployer.deploy(ForkonomicSystem)
+    .then(()=> deployer.deploy(Distribution))
+    .then(()=> deployer.deploy(RealityCheck))
+    .then(()=> deployer.deploy(ForkonomicToken, ForkonomicSystem.address, [accounts[0], accounts[1], accounts[2], Distribution.address]))
+    .then(()=> deployer.deploy(ForkonomicETTF, RealityCheck.address, ForkonomicSystem.address, []))
   	.then(()=> deployer.deploy(Math))
-  	.then(()=> deployer.link(Math, SclarEvent))
+  	.then(()=> deployer.link(Math, ScalarEvent))
   	.then(()=> deployer.link(Math, OutcomeToken))
-
+  	.then(()=> deployer.link(Math, LMSRMarketMaker))
+  	.then(()=> deployer.link(Math, StandardMarket))
+  	.then(()=> deployer.deploy(OutcomeToken))
+  	.then(()=> deployer.deploy(ScalarEvent))
+  	.then(()=> ForkonomicSystem.deployed())
+  	.then((fSystem)=> fSystem.genesisBranchHash())
+  	.then((branch)=> deployer.deploy(ScalarEventProxy, ScalarEvent.address, ForkonomicToken.address, RealityCheck.address,
+  		OutcomeToken.address, branch,
+		question,
+		openingTs,
+        timeout, 
+        templateId,
+        accounts[1], // arbitrator
+        minBound, // min-bound
+        maxBound))  // max-bound
+  	.then(() => deployer.deploy(LMSRMarketMaker))
+  	.then(() => deployer.deploy(StandardMarket, accounts[0], ScalarEventProxy.address, LMSRMarketMaker.address, 0))
 }
+

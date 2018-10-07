@@ -3,8 +3,7 @@ import "@gnosis.pm/pm-contracts/contracts/Tokens/Token.sol";
 import "./OutcomeToken.sol";
 import "./Proxy.sol";
 import "@josojo/forkonomics-contracts/contracts/ForkonomicToken.sol";
-import "@josojo/forkonomics-contracts/contracts/ForkonomicsInterface.sol";
-import "@josojo/forkonomics-contracts/contracts/RealityCheck.sol";
+import "@realitio/realitio-contracts/truffle/contracts/RealityCheck.sol";
 
 
 contract EventData {
@@ -16,7 +15,7 @@ contract EventData {
     event OutcomeTokenSetIssuance(address indexed buyer, uint collateralTokenCount);
     event OutcomeTokenSetRevocation(address indexed seller, uint outcomeTokenCount);
     event WinningsRedemption(address indexed receiver, uint winnings, bytes32 branch);
-
+    event LogB(bytes32 a);
     /*
      *  Storage
      */
@@ -28,9 +27,9 @@ contract EventData {
     bytes32 public collateralBranch;
     bytes32 public questionId;
     bytes32 public content_hash;
-    uint256 public min_bond = 50000000000000000;
-    uint32 public min_timeout= (1 days);
-    uint256 public opening_ts;
+    uint256 public minBond = 500;
+    uint32 public minTimeout = 60*60*24;
+    uint32 public openingTs;
     RealityCheck realityCheck;
 
 
@@ -80,13 +79,13 @@ contract Event is EventData {
     {
 
         // check that original branch is a father of executionbranch:
-        require(fSystem.isFatherOfBranch(collateralBranch, branch));
+        //require(fSystem.isFatherOfBranch(collateralBranch, branch), " not a fahter branch");
 
          // ensure that arbitrator is white-listed
-        require(fSystem.isArbitratorWhitelisted(arbitrator, branch));
-   
-        outcome = int(realityCheck.getFinalAnswerIfMatches(questionId, content_hash, arbitrator, min_timeout, opening_ts));
+        //require(fSystem.isArbitratorWhitelisted(arbitrator, branch), "arbitrator not white-listed");
 
+        //require(fSystem.branchTimestamp(branch) > realityCheck.getQuestionFinalizationTs(questionId) - fSystem.WINDOWTIMESPAN(), "branch is to old");
+        outcome = int(realityCheck.getFinalAnswerIfMatches(questionId, content_hash, arbitrator, minTimeout, minBond));
     }
 
     /// @dev Returns outcome count

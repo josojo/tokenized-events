@@ -4,33 +4,37 @@
 const ScalarEvent = artifacts.require('./ScalarEvent');
 const ScalarEventProxy = artifacts.require('./ScalarEventProxy'); 
 const OutcomeToken = artifacts.require('./OutcomeToken'); 
+const ForkonomicToken = artifacts.require("ForkonomicToken")
+const ForkonomicSystem = artifacts.require("ForkonomicSystem")
+const RealityCheck = artifacts.require("RealityCheck")
+
 
 const { 
-  eventWatcher,
-  logger,
-  timestamp,
-  gasLogger,
-  enableContractFlag,
-  getParamFromTxEvent,
-} = require('./utils')
+  getContracts,
+  bn,
+  createNewBranch,
+} = require('./testingFunctions.js')
 
 const {
-  setupTest,
-  getContracts,
-  genesis_branch,
-  first_branch,
-  wait,
-  bn,
-  arbitrationCost,
-  initialFunding,
-  feeForRealityToken,
-} = require('./testingFunctions')
+  assertRejects,
+  timestamp,
+  increaseTime,
+  increaseTimeTo,
+  padAddressToBytes32,
+} = require("./utilities.js")
+const { wait } = require('@digix/tempo')(web3)
+
+// Vars from the deployment script:
+const question ="How many points will the DOW JONES - divided by the RealityToken price - notate on the 1.1.2019  00:00:00?";
+const openingTs = 1546297200; // date -d '1/1/2019 00:00:00' +"%s"
+const timeout = 60*60*24  // one day
+const templateId = 1 //asking for an uint
+const minBound = 1000
+const maxBound = 100000
+
 
 // Test VARS
 let initialDistribution
-let dataContract1
-let realityToken
-let realityCheck
 let contracts
 let branches 
 let questionId
@@ -38,7 +42,10 @@ let eventDerivative;
 let longTokens;
 let shortTokens;
 let stableTokens;
+let TwentyThoustand = '0x0000000000000000000000000000000000000000000000000000000004140200'// 20k in hex is 4E20
+let TenThoustand = '0x0000000000000000000000000000000000000000000000000000000002070100'// 10k in hex is 2710
 let YES = '0x0000000000000000000000000000000000000000000000000000000000000032'
+
 YES = new String(YES).valueOf()
 let NO = '0x0000000000000000000000000000000000000000000000000000000000000000'
 NO = new String(NO).valueOf()
@@ -47,113 +54,84 @@ const historyHashes = []
 const answers = []
 const submiters = []
 const bonds = []
+let branch = []
 
-const setupContracts = async () => {
-  contracts = await getContracts();
-  // destructure contracts into upper state
-  ({
-    RealityToken: realityToken,
-    RealityCheck: realityCheck,
-  } = contracts)
-}
 
 const startBal = {
   amountRLT: 50e18,
 }
 const betAmount = 1e5
+let fSystem
+let fToken
+let realityCheck
+let scalarEventProxy
 
-
-const c1 = () => contract('Financial Products - Short position on an ERC20 Token', (accounts) => {
-  const [master, arbitrator, RCasker, bonder50, bonder0, BranchProvider, MarketMaker, Consumer] = accounts
+contract('Financial Products - Short position on an ERC20 Token', (accounts) => {
+  const [master, arbitrator, MarketMaker, RCasker, bonder20k, bonder0, BranchProvider, Consumer] = accounts
 
   before(async () => {
     // get contracts
-    await setupContracts()
-    // set up accounts and tokens[contracts]
-    const first_branch = await setupTest(accounts, contracts, startBal)
-    branches = [[genesis_branch], [first_branch]]
+    fSystem = await ForkonomicSystem.deployed();
+    fToken = await ForkonomicToken.deployed();
+    realityCheck = await RealityCheck.deployed();
+    scalarEventProxy = await ScalarEventProxy.deployed();
+    eventDerivative = ScalarEvent.at(ScalarEventProxy.address)
+    branch.push(await fSystem.genesisBranchHash())
   })
 
-  afterEach(gasLogger)
 
   it('step 1 - The realityCheck event is created', async () => {
-    await realityToken.approve(realityCheck.address, betAmount, branches[1][0], { from: RCasker })
-    assert.equal((await realityToken.allowance(RCasker, realityCheck.address, branches[1][0])).toNumber(), betAmount)
-    const transaction = await realityCheck.askQuestion(0, 'What will be the price ERC20/RealityToken on 1.1.2019', 60 * 60 * 10, 0, 0, betAmount, branches[1][0], 0, { from: RCasker })
-    questionId = getParamFromTxEvent(transaction, 'question_id', 'LogNewQuestion')
-    console.log(`question asked with question_id${questionId}`)
+    questionId = await  eventDerivative.questionId()
+    console.log(questionId)
   })
 
   it('step 2 - Tokenize the event and create the financial derivative', async () => {
-    let scalarEventLogic = await ScalarEvent.new();
-    let outcomeTokenLogic = await OutcomeToken.new();
-    eventDerivativeProxy = await ScalarEventProxy.new(scalarEventLogic.address,
-        realityToken.address,
-        realityCheck.address,
-        outcomeTokenLogic.address,
-        branches[1][0],
-        questionId,
-        0,
-        100)
-    eventDerivative = ScalarEvent.at(eventDerivativeProxy.address)
+    const currentBranch = await fSystem.genesisBranchHash()
     longTokens = OutcomeToken.at(await eventDerivative.outcomeTokens(0));
     shortTokens = OutcomeToken.at(await eventDerivative.outcomeTokens(1));
     //funding markets
-    await realityToken.approve(eventDerivativeProxy.address, 30e8, branches[1][0], {from: MarketMaker})
-    await eventDerivative.buyAllOutcomes(30e8, {from: MarketMaker});
-    assert.equal(await longTokens.balanceOf(MarketMaker),30e8,"long tokens were not created")
-    })
-
-   it('step 3 - MarketMaker trades his OutcomeTokens ', async () => {
-    await shortTokens.transfer(Consumer, 10e8, {from: MarketMaker})
-    assert.equal((await shortTokens.balanceOf(Consumer)).toNumber(), 10e8)
-    })
-
-  it('step 4 - bonder50 provides the answer 50', async () => {
-    await realityToken.approve(realityCheck.address, betAmount, branches[1][0], { from: bonder50 })
-    assert.equal((await realityToken.allowance(bonder50, realityCheck.address, branches[1][0])).toNumber(), betAmount)
-    const transaction = await realityCheck.submitAnswer(questionId, YES, betAmount, betAmount, { from: bonder50 })
-    historyHashes.push(new String(getParamFromTxEvent(transaction, 'history_hash', 'LogNewAnswer')).valueOf())
-    answers.push(YES)
-    submiters.push(bonder50)
-    bonds.push(betAmount)
+    await fToken.approve(eventDerivative.address, 30e4, currentBranch, {from: MarketMaker})
+    await eventDerivative.buyAllOutcomes(30e4, {from: MarketMaker});
+    assert.equal(await longTokens.balanceOf(MarketMaker),30e4,"long tokens were not created")
   })
 
-  it('step 5 - bonder0 provides the answer 0 doubling the bonding', async () => {
-    await realityToken.approve(realityCheck.address, 2 * betAmount, branches[1][0], { from: bonder0 })
-    assert.equal((await realityToken.allowance(bonder0, realityCheck.address, branches[1][0])).toNumber(), 2 * betAmount)
-    const transaction = await realityCheck.submitAnswer(questionId, NO, 2 * betAmount, 2 * betAmount, { from: bonder0 })
-    historyHashes.push(new String(getParamFromTxEvent(transaction, 'history_hash', 'LogNewAnswer')).valueOf())
-    answers.push(NO)
-    submiters.push(bonder0)
-    bonds.push(2 * betAmount)
+  it('step 3 - MarketMaker trades his OutcomeTokens ', async () => {
+    await shortTokens.transfer(Consumer, 10e4, {from: MarketMaker})
+    assert.equal((await shortTokens.balanceOf(Consumer)).toNumber(), 10e4)
   })
-  it('step 6 - bonder50 pays the RealityToken to arbitrate', async () => {
-    const arbitratorList = artifacts.require('./ArbitratorList').at(await realityToken.getArbitratorList(branches[1][0]))
-    const arbitratorData = artifacts.require('./RealityCheckArbitrator').at(await arbitratorList.arbitrators(0))
-    await arbitratorData.notifyOfArbitrationRequest(questionId, bonder0, branches[1][0], { from: arbitrator })
+
+
+  it('step 4 - bonder20k provides the answer 20k', async () => {
+    const openingTs = (await eventDerivative.openingTs()).toNumber()
+    await increaseTimeTo(openingTs)
+    console.log(questionId)
+    await realityCheck.submitAnswer(questionId, TwentyThoustand, 50000000000,  { from: bonder20k, value: 5000})
+    const timeout = (await realityCheck.getQuestionFinalizationTs(questionId)).toNumber()
+    await increaseTime(timeout+1)
   })
-  it('step 7 - Arbitrator submits the answer Yes and new branch is submitted', async () => {
-    const arbitratorList = artifacts.require('./ArbitratorList').at(await realityToken.getArbitratorList(branches[1][0]))
-    // create new branch:
-    await wait(86400)
 
-    const transaction = await realityToken.createBranch(branches[1][0], genesis_branch, arbitratorList.address, master, 0)
-    const second_branch = getParamFromTxEvent(transaction, 'hash', 'BranchCreated')
-    console.log(`second branch created with hash${second_branch}`)
-    branches.push([second_branch])
-
-    const arbitratorData = artifacts.require('./RealityCheckArbitrator').at(await arbitratorList.arbitrators(0))
-    await arbitratorData.addAnswer([questionId], [YES], [7], { from: arbitrator })
-
-    // create new branch:
-    await wait(86400)
-    const transaction2 = await realityToken.createBranch(branches[2][0], genesis_branch, arbitratorList.address, master, 0)
-    const third_branch = getParamFromTxEvent(transaction2, 'hash', 'BranchCreated')
-    console.log(`second branch created with hash${third_branch}`)
-    branches.push([third_branch])
-
+  it('Creating new branches', async () => {
+    const keyForArbitrators = await fSystem.createArbitratorWhitelist.call([arbitrator])
+    await fSystem.createArbitratorWhitelist([arbitrator])
+    const genesis_branch = await fSystem.genesisBranchHash();
+    const waitingTime = (await fSystem.WINDOWTIMESPAN()).toNumber()+1
+    await increaseTime(waitingTime)
+    branch.push(await fSystem.createBranch.call(genesis_branch, keyForArbitrators))
+    await fSystem.createBranch(genesis_branch, keyForArbitrators)
   })
+
+  it('step 5 - Consumer gets winnings from dow jones bet', async () => {
+    assert.equal((await shortTokens.balanceOf(Consumer)).toNumber(), 10e4)
+    await eventDerivative.revokeOutcomeTokens({from: Consumer})
+    await eventDerivative.getOutcome(branch[1], arbitrator, {from: Consumer})
+    console.log(await timestamp())
+    console.log((await realityCheck.getQuestionFinalizationTs(questionId)).toNumber())
+    //await eventDerivative.redeemWinnings(branch[1], arbitrator, {from: Consumer})
+  })
+
+
+/*
+ 
   it('step 8 - bonder0 makes himself a arbitrator, and submits the answer 0 in a new branch', async () => {
     const arbitratorData = await artifacts.require('./RealityCheckArbitrator').new(realityCheck.address, { from: bonder0 })
     const arbitratorList = await artifacts.require('./ArbitratorList').new([arbitratorData.address])
@@ -165,7 +143,7 @@ const c1 = () => contract('Financial Products - Short position on an ERC20 Token
     console.log(`second branch created with hash${second_branch}`)
     branches[2][1] = second_branch
   })
-  it('step 9 - bonder50 withdraws the winnings on the yes branch', async () => {
+  it('step 9 - bonder20k withdraws the winnings on the yes branch', async () => {
     submiters.reverse()
     bonds.reverse()
     answers.reverse()
@@ -179,7 +157,7 @@ const c1 = () => contract('Financial Products - Short position on an ERC20 Token
       bonds,
       answers,
     )
-    assert.equal((await realityToken.balanceOf(bonder50, branches[3][0])).toNumber(), initialFunding + betAmount + 2 * betAmount - feeForRealityToken)
+    assert.equal((await realityToken.balanceOf(bonder20k, branches[3][0])).toNumber(), initialFunding + betAmount + 2 * betAmount - feeForRealityToken)
     assert.equal((await realityToken.balanceOf(bonder0, branches[3][0])).toNumber(), initialFunding - 2 * betAmount )
   })
   it('step 10 - bonder0 withdraws the winnings on the no branch', async () => {
@@ -194,7 +172,7 @@ const c1 = () => contract('Financial Products - Short position on an ERC20 Token
       answers,
     ) 
     assert.equal((await realityToken.balanceOf(bonder0, branches[2][1])).toNumber(), initialFunding + betAmount + betAmount - feeForRealityToken)
-    assert.equal((await realityToken.balanceOf(bonder50, branches[2][1])).toNumber(), initialFunding - betAmount)
+    assert.equal((await realityToken.balanceOf(bonder20k, branches[2][1])).toNumber(), initialFunding - betAmount)
   
   })
 
@@ -210,6 +188,5 @@ const c1 = () => contract('Financial Products - Short position on an ERC20 Token
       await eventDerivative.redeemWinnings(branches[2][1], {from: Consumer})
       assert.equal((await realityToken.balanceOf(Consumer, branches[2][1])).toNumber(),0)
   })
-})
+*/})
 
-enableContractFlag(c1)

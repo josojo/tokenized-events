@@ -1,9 +1,9 @@
 pragma solidity ^0.4.24;
 import "./Event.sol";
 import "./Proxy.sol";
+import "@josojo/forkonomics-contracts/contracts/ForkonomicToken.sol";
+import "@realitio/realitio-contracts/truffle/contracts/RealityCheck.sol";
 
-import "@josojo/forkonomics-contracts/contracts/ForkonomicsInterface.sol";
-import "@josojo/forkonomics-contracts/contracts/RealityCheck.sol";
 
 contract ScalarEventData {
 
@@ -20,13 +20,13 @@ contract ScalarEventData {
     int public lowerBound;
     int public upperBound;
 
-    mapping( address => bytes32[]) branchesUsedForWithdraw;
     // user => tokenCount of Short outcomeTokens
     mapping( address => uint) outcomeTokensCountShort;
     // user => tokenCount of Long outcomeTokens
     mapping( address => uint) outcomeTokensCountLong;
 
 }
+
 
 contract ScalarEventProxy is Proxy, EventData, ScalarEventData {
 
@@ -42,10 +42,10 @@ contract ScalarEventProxy is Proxy, EventData, ScalarEventData {
         RealityCheck _realityCheck,
         address outcomeTokenMasterCopy,
         bytes32 _collateralBranch,
-        string question,
-        uint32 opening_ts,
-        uint32  min_timeout,
-        uint8 template_id,
+        string question_,
+        uint32 openingTs_,
+        uint32  minTimeout_,
+        uint256 templateId_,
         address arbitrator,
         int _lowerBound,
         int _upperBound
@@ -62,10 +62,12 @@ contract ScalarEventProxy is Proxy, EventData, ScalarEventData {
 
 
         // create question in relaityCheck
-        bytes32 content_hash = keccak256(abi.encodePacked(template_id, opening_ts, question));  
-        realityCheck = _realityCheck;
-        questionId = realityCheck.askQuestion(0, question, arbitrator, min_timeout, opening_ts, 0);
+        openingTs = openingTs_;
+        minTimeout = minTimeout_; 
+        content_hash = keccak256(templateId_, openingTs_, question_);  
 
+        realityCheck = _realityCheck;
+        questionId = realityCheck.askQuestion(templateId_, question_, arbitrator, minTimeout, openingTs_, 0);
 
         // Create an outcome token for each outcome
         // Create LongTokens    
@@ -85,6 +87,7 @@ contract ScalarEventProxy is Proxy, EventData, ScalarEventData {
     }
 }
 
+
 /// @title Scalar event contract - Scalar events resolve to a number within a range
 /// @author Stefan George - <stefan@gnosis.pm>
 contract ScalarEvent is Proxied, Event, ScalarEventData {
@@ -99,18 +102,18 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
 
     function revokeOutcomeTokens()
         public
-        {
-            // only possible, if tokens were not yet revoked by this account
-            // if this function has already been used, the tokens needs to be transfered to another account
-            require(outcomeTokensCountShort[msg.sender] == 0 && outcomeTokensCountLong[msg.sender] == 0);
-            uint shortOutcomeTokenCount = outcomeTokens[SHORT].balanceOf(msg.sender);
-            outcomeTokensCountShort[msg.sender] = shortOutcomeTokenCount;
-            outcomeTokens[SHORT].revoke(msg.sender, shortOutcomeTokenCount);
-            uint longOutcomeTokenCount = outcomeTokens[LONG].balanceOf(msg.sender);
-            outcomeTokensCountLong[msg.sender] = longOutcomeTokenCount;
-            outcomeTokens[LONG].revoke(msg.sender, longOutcomeTokenCount);
+    {
+        // only possible, if tokens were not yet revoked by this account
+        // if this function has already been used, the tokens needs to be transfered to another account
+        require(outcomeTokensCountShort[msg.sender] == 0 && outcomeTokensCountLong[msg.sender] == 0);
+        uint shortOutcomeTokenCount = outcomeTokens[SHORT].balanceOf(msg.sender);
+        outcomeTokensCountShort[msg.sender] = shortOutcomeTokenCount;
+        outcomeTokens[SHORT].revoke(msg.sender, shortOutcomeTokenCount);
+        uint longOutcomeTokenCount = outcomeTokens[LONG].balanceOf(msg.sender);
+        outcomeTokensCountLong[msg.sender] = longOutcomeTokenCount;
+        outcomeTokens[LONG].revoke(msg.sender, longOutcomeTokenCount);
+    } 
 
-        } 
     /// @dev Exchanges sender's winning outcome tokens for collateral tokens
     /// @return Sender's winnings
     function redeemWinnings(bytes32 branchForWithdraw, address arbitrator)
@@ -118,6 +121,13 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
         returns (uint winnings)
     {
 
+        uint shortOutcomeTokenCount = outcomeTokensCountShort[msg.sender];
+        uint longOutcomeTokenCount = outcomeTokensCountLong[msg.sender];
+
+        // tokens need to be revoked before winnings can be redeemed
+        //require(shortOutcomeTokenCount > 0 || longOutcomeTokenCount > 0);
+
+        //calculate the winnings
         int outcome = getOutcome(branchForWithdraw, arbitrator);
         // Outcome is lower than defined lower bound
         uint convertedWinningOutcome = 0;
@@ -131,29 +141,23 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
             convertedWinningOutcome = uint24(OUTCOME_RANGE * (outcome - lowerBound) / (upperBound - lowerBound));
         uint factorShort = OUTCOME_RANGE - convertedWinningOutcome;
         uint factorLong = OUTCOME_RANGE - factorShort;
-        uint shortOutcomeTokenCount = outcomeTokensCountShort[msg.sender];
-        uint longOutcomeTokenCount = outcomeTokensCountLong[msg.sender];
         winnings = shortOutcomeTokenCount.mul(factorShort).add(longOutcomeTokenCount.mul(factorLong)) / OUTCOME_RANGE;
-        // Revoke all outcome tokens
 
         // Payout winnings to sender
-        require(!ForkonomicsInterface(forkonomicToken).hasBoxWithdrawal(msg.sender, NULL_HASH, branchForWithdraw, collateralBranch)); 
-        require(ForkonomicsInterface(forkonomicToken).boxTransfer( msg.sender, winnings, branchForWithdraw, NULL_HASH, NULL_HASH));
-        ForkonomicsInterface(forkonomicToken).recordBoxWithdrawal(NULL_HASH, winnings, branchForWithdraw);
+        //require(!ForkonomicToken(forkonomicToken).hasBoxWithdrawal(msg.sender, NULL_HASH, branchForWithdraw, collateralBranch)); 
+        //require(ForkonomicToken(forkonomicToken).boxTransfer(msg.sender, winnings, branchForWithdraw, NULL_HASH, NULL_HASH));
+        //require(ForkonomicToken(forkonomicToken).recordBoxWithdrawal(NULL_HASH, winnings, branchForWithdraw));
            
         emit WinningsRedemption(msg.sender, winnings, branchForWithdraw);
     }
 
-
     /// @dev Risky operation, deletes data and can safe gas in combination with other function calls
     /// @return free gas
     function clearData()
-    public{
+    public {
         delete outcomeTokensCountShort[msg.sender];
         delete outcomeTokensCountLong[msg.sender];
-        delete branchesUsedForWithdraw[msg.sender];
-    }
-    
+    }    
 
     /// @dev Calculates and returns event hash
     /// @return Event hash

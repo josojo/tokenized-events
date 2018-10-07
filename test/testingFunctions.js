@@ -32,9 +32,15 @@ Number.prototype.toEth = function toEth() {
 
 let genesis_branch = '0xfca5e1a248b8fee34db137da5e38b41f95d11feb5a8fa192a150d8d5d8de1c59'
 genesis_branch = new String(genesis_branch).valueOf()
+
+
 const contractNames = [
   'RealityCheck',
-  'RealityToken',
+  'ForkonomicToken',
+  'ForkonomicSystem',
+  'OutcomeToken',
+  'StandardMarket',
+  'LMSRMarketMaker',
 ]
 
 /**
@@ -46,75 +52,26 @@ const getContracts = async () => {
   const depContracts = contractNames.map(c => artifacts.require(c)).map(cc => cc.deployed())
   const contractInstances = await Promise.all(depContracts)
 
-  const gasLoggedContracts = gasLogWrapper(contractInstances)
-
   const deployedContracts = contractNames.reduce((acc, name, i) => {
-    acc[name] = gasLoggedContracts[i]
+    acc[name] = contractInstances[i]
     return acc
   }, {});
 
   return deployedContracts
 }
-const initialFunding = 1e10;
-const arbitrationCost = 1e19
-const feeForRealityToken = 100
 
-/**
- * >setupTest()
- * @param {Array[address]} accounts         => ganache-cli accounts passed in globally
- * @param {Object}         contract         => Contract object obtained via: const contract = await getContracts() (see above)
- * @param {Object}         number Amounts   => { ethAmount = amt to deposit and approve, gnoAmount = for gno, ethUSDPrice = eth price in USD }
- */
-const setupTest = async (
-  accounts,
-  {
-    RealityToken: realityToken,
-    RealityCheck: realityCheck,
-  },
-  {
-    amountRLT = 50.0.toWei(),
-  }) => {
-
-
-  //distribute funds
-  let newFundDistribution = await artifacts.require('./Distribution').new()
-  await newFundDistribution.injectReward(accounts, [initialFunding, initialFunding, initialFunding, initialFunding, initialFunding, initialFunding, initialFunding, initialFunding, initialFunding, initialFunding]);
-  await newFundDistribution.finalize();
- 
-  // make accounts[1] as arbitrator
-  const ArbitratorData = artifacts.require('./RealityCheckArbitrator'); 
-  let arbitratorData = await ArbitratorData.new(realityCheck.address, {from: accounts[1]})
-  
-  const ArbitratorList = artifacts.require('./ArbitratorList'); 
-  let arbitratorList = await ArbitratorList.new([arbitratorData.address]);
-  
+const createNewBranch = async (parentHash, arbitratorIdentifier) => {
   // create new branch:
-  await wait(86400)
+  await wait(await ForkonoimcSystem.WINDOWTIMESPAN())
 
-  const transaction = await realityToken.createBranch(genesis_branch, genesis_branch, arbitratorList.address, newFundDistribution.address, 2e20)
-  first_branch = getParamFromTxEvent(transaction, 'hash', 'BranchCreated')
-  console.log("first branch created with hash"+ first_branch)
-
-
-  // accounts can claim their rewards
-  await newFundDistribution.withdrawReward(realityToken.address, first_branch, {from: accounts[0]})
-  await newFundDistribution.withdrawReward(realityToken.address, first_branch, {from: accounts[1]})
-  await newFundDistribution.withdrawReward(realityToken.address, first_branch, {from: accounts[2]})
-  await newFundDistribution.withdrawReward(realityToken.address, first_branch, {from: accounts[3]})
-  await newFundDistribution.withdrawReward(realityToken.address, first_branch, {from: accounts[4]})
-  await newFundDistribution.withdrawReward(realityToken.address, first_branch, {from: accounts[6]})
-
-  return new String(first_branch).valueOf()
+  const transaction = await ForkonomicSystem.createBranch(parentHash, arbitratorIdentifier)
+  new_branch = getParamFromTxEvent(transaction, 'branchHash', 'BranchCreated')
+  console.log("new branch created with the hash"+ new_branch)
+  return new_branch
 }
-
 
 module.exports = {
   getContracts,
-  setupTest,
-  wait,
   bn,
-  genesis_branch,
-  arbitrationCost,
-  initialFunding,
-  feeForRealityToken,
+  createNewBranch,
 }
