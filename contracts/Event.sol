@@ -3,7 +3,7 @@ import "@gnosis.pm/pm-contracts/contracts/Tokens/Token.sol";
 import "./OutcomeToken.sol";
 import "./Proxy.sol";
 import "@josojo/forkonomics-contracts/contracts/ForkonomicToken.sol";
-import "@realitio/realitio-contracts/truffle/contracts/RealityCheck.sol";
+import "@josojo/realitio-contracts/truffle/contracts/Realitio.sol";
 
 
 contract EventData {
@@ -30,10 +30,9 @@ contract EventData {
     uint256 public minBond = 500;
     uint32 public minTimeout = 60*60*24;
     uint32 public openingTs;
-    RealityCheck realityCheck;
+    Realitio realityCheck;
+    bytes32 public outcome;
 
-
-    //OutcomeTokenMeta[] public outcomeTokens;
 }
 
 /// @title Event contract - Provide basic functionality required by different event types
@@ -49,7 +48,7 @@ contract Event is EventData {
         public
     {
         // Transfer collateral tokens to events contract
-        require(forkonomicToken.transferFrom(msg.sender, this, collateralTokenCount, collateralBranch));
+        require(forkonomicToken.transferFrom(msg.sender, this, collateralTokenCount, collateralBranch), "transfer was not possible");
         // Issue new outcome tokens to sender
         for (uint8 i = 0; i < outcomeTokens.length; i++)
             outcomeTokens[i].issue(msg.sender, collateralTokenCount);
@@ -65,7 +64,7 @@ contract Event is EventData {
         for (uint8 i = 0; i < outcomeTokens.length; i++)
             outcomeTokens[i].revoke(msg.sender, outcomeTokenCount);
         // Transfer collateral tokens to sender
-        require(forkonomicToken.transfer(msg.sender, outcomeTokenCount, collateralBranch));
+        require(forkonomicToken.transfer(msg.sender, outcomeTokenCount, collateralBranch), "transfer failed");
         emit OutcomeTokenSetRevocation(msg.sender, outcomeTokenCount);
     }
 
@@ -79,12 +78,12 @@ contract Event is EventData {
     {
 
         // check that original branch is a father of executionbranch:
-        //require(fSystem.isFatherOfBranch(collateralBranch, branch), " not a fahter branch");
+        require(fSystem.isFatherOfBranch(collateralBranch, branch), " not a fahter branch");
 
          // ensure that arbitrator is white-listed
-        //require(fSystem.isArbitratorWhitelisted(arbitrator, branch), "arbitrator not white-listed");
+        require(fSystem.isArbitratorWhitelisted(arbitrator, branch), "arbitrator not white-listed");
 
-        //require(fSystem.branchTimestamp(branch) > realityCheck.getQuestionFinalizationTs(questionId) - fSystem.WINDOWTIMESPAN(), "branch is to old");
+        require(fSystem.branchTimestamp(branch) > realityCheck.getFinalizeTS(questionId) - fSystem.WINDOWTIMESPAN(), "branch is to old");
         outcome = int(realityCheck.getFinalAnswerIfMatches(questionId, content_hash, arbitrator, minTimeout, minBond));
     }
 

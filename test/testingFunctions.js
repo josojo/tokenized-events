@@ -35,7 +35,7 @@ genesis_branch = new String(genesis_branch).valueOf()
 
 
 const contractNames = [
-  'RealityCheck',
+  'Realitio',
   'ForkonomicToken',
   'ForkonomicSystem',
   'OutcomeToken',

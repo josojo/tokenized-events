@@ -13,9 +13,9 @@ contract StandardTokenData {
     string public symbol = "SYM";
     uint8 public constant decimals = 18;  
 
-    mapping (address => uint) balances;
-    mapping (address => mapping (address => uint)) allowances;
-    uint totalTokens;
+    mapping (address => uint) public balances;
+    mapping (address => mapping (address => uint)) public allowances;
+    uint public totalTokens;
 }
 
 /// @title Standard token contract with overflow protection

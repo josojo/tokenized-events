@@ -6,7 +6,7 @@ const ScalarEventProxy = artifacts.require('./ScalarEventProxy');
 const OutcomeToken = artifacts.require('./OutcomeToken'); 
 const ForkonomicToken = artifacts.require("ForkonomicToken")
 const ForkonomicSystem = artifacts.require("ForkonomicSystem")
-const RealityCheck = artifacts.require("RealityCheck")
+const Realitio = artifacts.require("Realitio")
 
 
 const { 
@@ -26,7 +26,7 @@ const { wait } = require('@digix/tempo')(web3)
 
 // Vars from the deployment script:
 const question ="How many points will the DOW JONES - divided by the RealityToken price - notate on the 1.1.2019  00:00:00?";
-const openingTs = 1546297200; // date -d '1/1/2019 00:00:00' +"%s"
+const openingTs = 18462972000; // date -d '1/1/2019 00:00:00' +"%s"
 const timeout = 60*60*24  // one day
 const templateId = 1 //asking for an uint
 const minBound = 1000
@@ -73,26 +73,25 @@ contract('Financial Products - Short position on an ERC20 Token', (accounts) => 
     // get contracts
     fSystem = await ForkonomicSystem.deployed();
     fToken = await ForkonomicToken.deployed();
-    realityCheck = await RealityCheck.deployed();
+    realityCheck = await Realitio.deployed();
     scalarEventProxy = await ScalarEventProxy.deployed();
-    eventDerivative = ScalarEvent.at(ScalarEventProxy.address)
+    eventDerivative = await ScalarEvent.at(ScalarEventProxy.address)
     branch.push(await fSystem.genesisBranchHash())
   })
 
 
   it('step 1 - The realityCheck event is created', async () => {
     questionId = await  eventDerivative.questionId()
-    console.log(questionId)
   })
 
   it('step 2 - Tokenize the event and create the financial derivative', async () => {
-    const currentBranch = await fSystem.genesisBranchHash()
-    longTokens = OutcomeToken.at(await eventDerivative.outcomeTokens(0));
-    shortTokens = OutcomeToken.at(await eventDerivative.outcomeTokens(1));
-    //funding markets
+    const currentBranch = await fSystem.genesisBranchHash.call()
+    longTokens = await OutcomeToken.at(await eventDerivative.outcomeTokens(0));
+    shortTokens = await OutcomeToken.at(await eventDerivative.outcomeTokens(1));
+     //funding markets
     await fToken.approve(eventDerivative.address, 30e4, currentBranch, {from: MarketMaker})
     await eventDerivative.buyAllOutcomes(30e4, {from: MarketMaker});
-    assert.equal(await longTokens.balanceOf(MarketMaker),30e4,"long tokens were not created")
+    assert.equal((await longTokens.balanceOf(MarketMaker)).toNumber(),30e4,"long tokens were not created")
   })
 
   it('step 3 - MarketMaker trades his OutcomeTokens ', async () => {
@@ -102,19 +101,18 @@ contract('Financial Products - Short position on an ERC20 Token', (accounts) => 
 
 
   it('step 4 - bonder20k provides the answer 20k', async () => {
-    const openingTs = (await eventDerivative.openingTs()).toNumber()
-    await increaseTimeTo(openingTs)
-    console.log(questionId)
+    const openingTs = (await eventDerivative.openingTs.call()).toNumber()
+    await increaseTimeTo(openingTs +1)
     await realityCheck.submitAnswer(questionId, TwentyThoustand, 50000000000,  { from: bonder20k, value: 5000})
-    const timeout = (await realityCheck.getQuestionFinalizationTs(questionId)).toNumber()
+    const timeout = (await realityCheck.getFinalizeTS(questionId)).toNumber()
     await increaseTime(timeout+1)
   })
 
   it('Creating new branches', async () => {
     const keyForArbitrators = await fSystem.createArbitratorWhitelist.call([arbitrator])
     await fSystem.createArbitratorWhitelist([arbitrator])
-    const genesis_branch = await fSystem.genesisBranchHash();
-    const waitingTime = (await fSystem.WINDOWTIMESPAN()).toNumber()+1
+    const genesis_branch = await fSystem.genesisBranchHash.call();
+    const waitingTime = (await fSystem.WINDOWTIMESPAN.call()).toNumber()+1
     await increaseTime(waitingTime)
     branch.push(await fSystem.createBranch.call(genesis_branch, keyForArbitrators))
     await fSystem.createBranch(genesis_branch, keyForArbitrators)
@@ -124,16 +122,15 @@ contract('Financial Products - Short position on an ERC20 Token', (accounts) => 
     assert.equal((await shortTokens.balanceOf(Consumer)).toNumber(), 10e4)
     await eventDerivative.revokeOutcomeTokens({from: Consumer})
     await eventDerivative.getOutcome(branch[1], arbitrator, {from: Consumer})
-    console.log(await timestamp())
-    console.log((await realityCheck.getQuestionFinalizationTs(questionId)).toNumber())
-    //await eventDerivative.redeemWinnings(branch[1], arbitrator, {from: Consumer})
+
+    await eventDerivative.redeemWinnings(branch[1], arbitrator, {from: Consumer})
   })
 
 
 /*
  
   it('step 8 - bonder0 makes himself a arbitrator, and submits the answer 0 in a new branch', async () => {
-    const arbitratorData = await artifacts.require('./RealityCheckArbitrator').new(realityCheck.address, { from: bonder0 })
+    const arbitratorData = await artifacts.require('./RealitioArbitrator').new(realityCheck.address, { from: bonder0 })
     const arbitratorList = await artifacts.require('./ArbitratorList').new([arbitratorData.address])
     
     await arbitratorData.addAnswer([questionId], [NO], [7], { from: bonder0 })

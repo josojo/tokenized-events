@@ -19,7 +19,7 @@ contract OutcomeTokenData {
      */
     modifier isEventContract () {
         // Only event contract is allowed to proceed
-        require(msg.sender == eventContract);
+        require(msg.sender == eventContract, "contract not event Contract");
         _;
     }
 }
@@ -51,7 +51,7 @@ contract OutcomeToken is Proxied, StandardToken, OutcomeTokenData {
     /// @param outcomeTokenCount Number of tokens to issue
     function issue(address _for, uint outcomeTokenCount)
         public
-        isEventContract
+        isEventContract()
     {
         balances[_for] = balances[_for].add(outcomeTokenCount);
         totalTokens = totalTokens.add(outcomeTokenCount);
@@ -63,7 +63,7 @@ contract OutcomeToken is Proxied, StandardToken, OutcomeTokenData {
     /// @param outcomeTokenCount Number of tokens to revoke
     function revoke(address _for, uint outcomeTokenCount)
         public
-        isEventContract
+        isEventContract()
     {
         balances[_for] = balances[_for].sub(outcomeTokenCount);
         totalTokens = totalTokens.sub(outcomeTokenCount);

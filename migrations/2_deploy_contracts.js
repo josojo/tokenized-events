@@ -1,5 +1,5 @@
 var ForkonomicSystem = artifacts.require("./ForkonomicSystem.sol");
-var RealityCheck = artifacts.require("./RealityCheck.sol");
+var Realitio = artifacts.require("./Realitio.sol");
 
 var ForkonomicToken = artifacts.require("./ForkonomicToken.sol")
 var Distribution= artifacts.require("./Distribution.sol");
@@ -22,9 +22,9 @@ const maxBound = 100000
 module.exports = function(deployer, network, accounts) {
     deployer.deploy(ForkonomicSystem)
     .then(()=> deployer.deploy(Distribution))
-    .then(()=> deployer.deploy(RealityCheck))
+    .then(()=> deployer.deploy(Realitio))
     .then(()=> deployer.deploy(ForkonomicToken, ForkonomicSystem.address, [accounts[0], accounts[1], accounts[2], Distribution.address]))
-    .then(()=> deployer.deploy(ForkonomicETTF, RealityCheck.address, ForkonomicSystem.address, []))
+    .then(()=> deployer.deploy(ForkonomicETTF, Realitio.address, ForkonomicSystem.address, []))
   	.then(()=> deployer.deploy(Math))
   	.then(()=> deployer.link(Math, ScalarEvent))
   	.then(()=> deployer.link(Math, OutcomeToken))
@@ -34,7 +34,7 @@ module.exports = function(deployer, network, accounts) {
   	.then(()=> deployer.deploy(ScalarEvent))
   	.then(()=> ForkonomicSystem.deployed())
   	.then((fSystem)=> fSystem.genesisBranchHash())
-  	.then((branch)=> deployer.deploy(ScalarEventProxy, ScalarEvent.address, ForkonomicToken.address, RealityCheck.address,
+  	.then((branch)=> deployer.deploy(ScalarEventProxy, ScalarEvent.address, ForkonomicToken.address, ForkonomicSystem.address, Realitio.address,
   		OutcomeToken.address, branch,
 		question,
 		openingTs,

@@ -2,7 +2,8 @@ pragma solidity ^0.4.24;
 import "./Event.sol";
 import "./Proxy.sol";
 import "@josojo/forkonomics-contracts/contracts/ForkonomicToken.sol";
-import "@realitio/realitio-contracts/truffle/contracts/RealityCheck.sol";
+import "@josojo/forkonomics-contracts/contracts/ForkonomicSystem.sol";
+import "@josojo/realitio-contracts/truffle/contracts/Realitio.sol";
 
 
 contract ScalarEventData {
@@ -39,7 +40,8 @@ contract ScalarEventProxy is Proxy, EventData, ScalarEventData {
     constructor(
         address proxied,
         ForkonomicToken _forkonomicToken,
-        RealityCheck _realityCheck,
+        ForkonomicSystem _fSystem,
+        Realitio _realityCheck,
         address outcomeTokenMasterCopy,
         bytes32 _collateralBranch,
         string question_,
@@ -54,17 +56,18 @@ contract ScalarEventProxy is Proxy, EventData, ScalarEventData {
         public
     {
         // Validate input
-        require(address(_forkonomicToken) != 0 && address(_realityCheck) != 0);
-        require(_collateralBranch != bytes32(0));
+        require(address(_forkonomicToken) != 0 && address(_realityCheck) != 0, "please check the input for the constructor");
+        require(_collateralBranch != bytes32(0), " please check the collateralBranch");
 
         forkonomicToken = _forkonomicToken;
+        fSystem = _fSystem;
         collateralBranch = _collateralBranch;
 
 
         // create question in relaityCheck
         openingTs = openingTs_;
         minTimeout = minTimeout_; 
-        content_hash = keccak256(templateId_, openingTs_, question_);  
+        content_hash = keccak256(abi.encodePacked(templateId_, openingTs_, question_));  
 
         realityCheck = _realityCheck;
         questionId = realityCheck.askQuestion(templateId_, question_, arbitrator, minTimeout, openingTs_, 0);
@@ -81,7 +84,7 @@ contract ScalarEventProxy is Proxy, EventData, ScalarEventData {
             
     
         // Validate bounds
-        require(_upperBound > _lowerBound);
+        require(_upperBound > _lowerBound, " bounds are not set correctly");
         lowerBound = _lowerBound;
         upperBound = _upperBound;
     }
@@ -105,7 +108,7 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
     {
         // only possible, if tokens were not yet revoked by this account
         // if this function has already been used, the tokens needs to be transfered to another account
-        require(outcomeTokensCountShort[msg.sender] == 0 && outcomeTokensCountLong[msg.sender] == 0);
+        require(outcomeTokensCountShort[msg.sender] == 0 && outcomeTokensCountLong[msg.sender] == 0, "tokens have already been revoked");
         uint shortOutcomeTokenCount = outcomeTokens[SHORT].balanceOf(msg.sender);
         outcomeTokensCountShort[msg.sender] = shortOutcomeTokenCount;
         outcomeTokens[SHORT].revoke(msg.sender, shortOutcomeTokenCount);
@@ -125,10 +128,10 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
         uint longOutcomeTokenCount = outcomeTokensCountLong[msg.sender];
 
         // tokens need to be revoked before winnings can be redeemed
-        //require(shortOutcomeTokenCount > 0 || longOutcomeTokenCount > 0);
+        require(shortOutcomeTokenCount > 0 || longOutcomeTokenCount > 0, " first tokens must be revoked");
 
         //calculate the winnings
-        int outcome = getOutcome(branchForWithdraw, arbitrator);
+        int outcome = 1;//getOutcome(branchForWithdraw, arbitrator);
         // Outcome is lower than defined lower bound
         uint convertedWinningOutcome = 0;
         if (outcome < lowerBound)
@@ -144,9 +147,9 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
         winnings = shortOutcomeTokenCount.mul(factorShort).add(longOutcomeTokenCount.mul(factorLong)) / OUTCOME_RANGE;
 
         // Payout winnings to sender
-        //require(!ForkonomicToken(forkonomicToken).hasBoxWithdrawal(msg.sender, NULL_HASH, branchForWithdraw, collateralBranch)); 
-        //require(ForkonomicToken(forkonomicToken).boxTransfer(msg.sender, winnings, branchForWithdraw, NULL_HASH, NULL_HASH));
-        //require(ForkonomicToken(forkonomicToken).recordBoxWithdrawal(NULL_HASH, winnings, branchForWithdraw));
+        require(!ForkonomicToken(forkonomicToken).hasBoxWithdrawal(msg.sender, NULL_HASH, branchForWithdraw, collateralBranch), "there had already been a withdrawal (redeemWinnings)"); 
+        require(ForkonomicToken(forkonomicToken).boxTransfer(msg.sender, winnings, branchForWithdraw, NULL_HASH, NULL_HASH), "transfer went wrong (redeemWinnings)");
+        require(ForkonomicToken(forkonomicToken).recordBoxWithdrawal(NULL_HASH, winnings, branchForWithdraw), "withdrawal could not be recorded");
            
         emit WinningsRedemption(msg.sender, winnings, branchForWithdraw);
     }
