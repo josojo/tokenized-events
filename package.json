@@ -1,7 +1,7 @@
 {
-  "name": "@josojo/realitytoken-contracts",
+  "name": "@josojo/tokenized-events",
   "version": "0.1.2",
-  "description": "realitytoken basic contracts",
+  "description": "tokenized events for pm markets",
   "main": "truffle.js",
   "directories": {
     "doc": "docs",
