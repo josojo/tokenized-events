@@ -73,7 +73,7 @@ contract('Financial Products - Short position on an ERC20 Token', (accounts) => 
   const [master, arbitrator, MarketMaker, RCasker, bonder20k, bonder0, BranchProvider, Consumer] = accounts
 
   before(async () => {
-    // get contracts
+    // get contracts //
     fSystem = await ForkonomicSystem.deployed();
     fToken = await ForkonomicToken.deployed();
     realityCheck = await Realitio.deployed();
@@ -92,8 +92,8 @@ contract('Financial Products - Short position on an ERC20 Token', (accounts) => 
     longTokens = await OutcomeToken.at(await eventDerivative.outcomeTokens(0));
     shortTokens = await OutcomeToken.at(await eventDerivative.outcomeTokens(1));
      //funding markets
-     console.log(await longTokens.eventContract.call())
-     console.log(eventDerivative.address)
+    // console.log(await longTokens.eventContract.call())
+    // console.log(eventDerivative.address)
     await fToken.approve(eventDerivative.address, 30e4, currentBranch, {from: MarketMaker})
     await eventDerivative.buyAllOutcomes(30e4, {from: MarketMaker});
     assert.equal((await longTokens.balanceOf(MarketMaker)).toNumber(),30e4,"long tokens were not created")
@@ -137,7 +137,7 @@ contract('Financial Products - Short position on an ERC20 Token', (accounts) => 
     assert.equal((await shortTokens.balanceOf(Consumer)).toNumber(), 10e4)
     assert.equal((await fToken.balanceOf.call(Consumer, newBranchHash)).toNumber(), 0)
     await eventDerivative.revokeOutcomeTokens({from: Consumer})
-    console.log(await eventDerivative.getOutcome(newBranchHash, arbitrator, {from: Consumer}))
+    //console.log(await eventDerivative.getOutcome(newBranchHash, arbitrator, {from: Consumer}))
 
     await eventDerivative.redeemWinnings(newBranchHash, arbitrator, {from: Consumer})
     assert.equal((await shortTokens.balanceOf(Consumer)).toNumber(), 0)
