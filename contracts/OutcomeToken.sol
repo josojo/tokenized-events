@@ -24,24 +24,21 @@ contract OutcomeTokenData {
     }
 }
 
-contract OutcomeTokenProxy is Proxy, StandardTokenData, OutcomeTokenData {
 
-    /// @dev Constructor sets events contract address
-    constructor(address proxied, string _symbol, string _name)
-        Proxy(proxied)
+/// @title Outcome token contract - Issuing and revoking outcome tokens
+/// @author Stefan George - <stefan@gnosis.pm>
+contract OutcomeToken is StandardToken, OutcomeTokenData {
+    using Math for *;
+
+
+     /// @dev Constructor sets events contract address
+    constructor(string _symbol, string _name)
         public
     {
         name = _name;
         symbol = _symbol;
         eventContract = msg.sender;
     }
-}
-
-
-/// @title Outcome token contract - Issuing and revoking outcome tokens
-/// @author Stefan George - <stefan@gnosis.pm>
-contract OutcomeToken is Proxied, StandardToken, OutcomeTokenData {
-    using Math for *;
 
     /*
      *  Public functions

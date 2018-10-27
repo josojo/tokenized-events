@@ -28,8 +28,8 @@
     "@digix/tempo": "^0.2.0",
     "@gnosis.pm/pm-contracts": "^1.1.0",
     "@gnosis.pm/util-contracts": "^0.2.10",
-    "@josojo/forkonomics-contracts": "^0.1.8",
-    "@josojo/realitio-contracts": "^1.0.3",
+    "@josojo/forkonomics-contracts": "^0.1.11",
+    "@realitio/realitio-contracts": "^2.0.1",
     "minimist": "^1.2.0"
   }
 }
