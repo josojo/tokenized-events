@@ -30,12 +30,13 @@ module.exports = function(deployer, network, accounts) {
   	.then(()=> deployer.link(Math, OutcomeToken))
   	.then(()=> deployer.link(Math, LMSRMarketMaker))
   	.then(()=> deployer.link(Math, StandardMarket))
-  	.then(()=> deployer.deploy(OutcomeToken))
+    .then(()=> deployer.link(Math, ScalarEventProxy))
+
+  	//.then(()=> deployer.deploy(OutcomeToken))
   	.then(()=> deployer.deploy(ScalarEvent))
   	.then(()=> ForkonomicSystem.deployed())
   	.then((fSystem)=> fSystem.genesisBranchHash())
-  	.then((branch)=> deployer.deploy(ScalarEventProxy, ScalarEvent.address, ForkonomicToken.address, ForkonomicSystem.address, Realitio.address,
-  		OutcomeToken.address, branch,
+  	.then((branch)=> deployer.deploy(ScalarEventProxy, ScalarEvent.address, ForkonomicToken.address, ForkonomicSystem.address, Realitio.address, branch,
 		question,
 		openingTs,
         timeout, 
@@ -45,5 +46,6 @@ module.exports = function(deployer, network, accounts) {
         maxBound))  // max-bound
   	.then(() => deployer.deploy(LMSRMarketMaker))
   	.then(() => deployer.deploy(StandardMarket, accounts[0], ScalarEventProxy.address, LMSRMarketMaker.address, 0))
+
 }
 

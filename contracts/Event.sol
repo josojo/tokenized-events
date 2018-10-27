@@ -3,7 +3,7 @@ import "@gnosis.pm/pm-contracts/contracts/Tokens/Token.sol";
 import "./OutcomeToken.sol";
 import "./Proxy.sol";
 import "@josojo/forkonomics-contracts/contracts/ForkonomicToken.sol";
-import "@josojo/realitio-contracts/truffle/contracts/Realitio.sol";
+import "@realitio/realitio-contracts/truffle/contracts/Realitio.sol";
 
 
 contract EventData {
@@ -36,8 +36,7 @@ contract EventData {
 }
 
 /// @title Event contract - Provide basic functionality required by different event types
-/// @author Stefan George - <stefan@gnosis.pm>
-contract Event is EventData {
+contract Event is Proxied, EventData {
 
     /*
      *  Public functions
@@ -48,7 +47,7 @@ contract Event is EventData {
         public
     {
         // Transfer collateral tokens to events contract
-        require(forkonomicToken.transferFrom(msg.sender, this, collateralTokenCount, collateralBranch), "transfer was not possible");
+        //require(forkonomicToken.transferFrom(msg.sender, this, collateralTokenCount, collateralBranch), "transfer was not possible");
         // Issue new outcome tokens to sender
         for (uint8 i = 0; i < outcomeTokens.length; i++)
             outcomeTokens[i].issue(msg.sender, collateralTokenCount);

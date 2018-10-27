@@ -42,10 +42,11 @@ let eventDerivative;
 let longTokens;
 let shortTokens;
 let stableTokens;
-let TwentyThoustand = '0x0000000000000000000000000000000000000000000000000000000004140200'// 20k in hex is 4E20
-let TenThoustand = '0x0000000000000000000000000000000000000000000000000000000002070100'// 10k in hex is 2710
-let YES = '0x0000000000000000000000000000000000000000000000000000000000000032'
 
+// predefine variables
+let TwentyThoustand = '0x0000000000000000000000000000000000000000000000000000000000004E20'// 20k in hex is 4E20
+let TenThoustand = '0x0000000000000000000000000000000000000000000000000000000000010000'// 10k in hex is 2710
+let YES = '0x0000000000000000000000000000000000000000000000000000000000000032'
 YES = new String(YES).valueOf()
 let NO = '0x0000000000000000000000000000000000000000000000000000000000000000'
 NO = new String(NO).valueOf()
@@ -55,6 +56,8 @@ const answers = []
 const submiters = []
 const bonds = []
 let branch = []
+let currentBranch
+let newBranchHash
 
 
 const startBal = {
@@ -89,6 +92,8 @@ contract('Financial Products - Short position on an ERC20 Token', (accounts) => 
     longTokens = await OutcomeToken.at(await eventDerivative.outcomeTokens(0));
     shortTokens = await OutcomeToken.at(await eventDerivative.outcomeTokens(1));
      //funding markets
+     console.log(await longTokens.eventContract.call())
+     console.log(eventDerivative.address)
     await fToken.approve(eventDerivative.address, 30e4, currentBranch, {from: MarketMaker})
     await eventDerivative.buyAllOutcomes(30e4, {from: MarketMaker});
     assert.equal((await longTokens.balanceOf(MarketMaker)).toNumber(),30e4,"long tokens were not created")
@@ -105,25 +110,39 @@ contract('Financial Products - Short position on an ERC20 Token', (accounts) => 
     await increaseTimeTo(openingTs +1)
     await realityCheck.submitAnswer(questionId, TwentyThoustand, 50000000000,  { from: bonder20k, value: 5000})
     const timeout = (await realityCheck.getFinalizeTS(questionId)).toNumber()
-    await increaseTime(timeout+1)
+    await increaseTimeTo(timeout+1)
   })
 
   it('Creating new branches', async () => {
+
+    fSystem = await ForkonomicSystem.deployed();
     const keyForArbitrators = await fSystem.createArbitratorWhitelist.call([arbitrator])
     await fSystem.createArbitratorWhitelist([arbitrator])
     const genesis_branch = await fSystem.genesisBranchHash.call();
-    const waitingTime = (await fSystem.WINDOWTIMESPAN.call()).toNumber()+1
+    var currentBranch = genesis_branch
+    const nrOfBranches = (await timestamp() - await fSystem.genesisWindowTimestamp.call())/(await fSystem.WINDOWTIMESPAN.call()).toNumber()
+    for (var i = 1; i < nrOfBranches; i++) {
+      newBranchHash =  await fSystem.createBranch.call(currentBranch, keyForArbitrators)
+      await fSystem.createBranch(currentBranch, keyForArbitrators)
+      currentBranch = newBranchHash
+    }
+    const waitingTime = (await fSystem.WINDOWTIMESPAN()).toNumber()+1
     await increaseTime(waitingTime)
-    branch.push(await fSystem.createBranch.call(genesis_branch, keyForArbitrators))
-    await fSystem.createBranch(genesis_branch, keyForArbitrators)
+    newBranchHash =  await fSystem.createBranch.call(currentBranch, keyForArbitrators)
+    await fSystem.createBranch(currentBranch, keyForArbitrators)
+
   })
 
   it('step 5 - Consumer gets winnings from dow jones bet', async () => {
     assert.equal((await shortTokens.balanceOf(Consumer)).toNumber(), 10e4)
+    assert.equal((await fToken.balanceOf.call(Consumer, newBranchHash)).toNumber(), 0)
     await eventDerivative.revokeOutcomeTokens({from: Consumer})
-    await eventDerivative.getOutcome(branch[1], arbitrator, {from: Consumer})
+    console.log(await eventDerivative.getOutcome(newBranchHash, arbitrator, {from: Consumer}))
 
-    await eventDerivative.redeemWinnings(branch[1], arbitrator, {from: Consumer})
+    await eventDerivative.redeemWinnings(newBranchHash, arbitrator, {from: Consumer})
+    assert.equal((await shortTokens.balanceOf(Consumer)).toNumber(), 0)
+    assert.equal((await fToken.balanceOf.call(Consumer, newBranchHash)).toNumber(), Math.ceil(10e4*(20000-minBound)/(maxBound-minBound))-1)
+
   })
 
 

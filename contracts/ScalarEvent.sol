@@ -3,7 +3,7 @@ import "./Event.sol";
 import "./Proxy.sol";
 import "@josojo/forkonomics-contracts/contracts/ForkonomicToken.sol";
 import "@josojo/forkonomics-contracts/contracts/ForkonomicSystem.sol";
-import "@josojo/realitio-contracts/truffle/contracts/Realitio.sol";
+import "@realitio/realitio-contracts/truffle/contracts/Realitio.sol";
 
 
 contract ScalarEventData {
@@ -42,7 +42,6 @@ contract ScalarEventProxy is Proxy, EventData, ScalarEventData {
         ForkonomicToken _forkonomicToken,
         ForkonomicSystem _fSystem,
         Realitio _realityCheck,
-        address outcomeTokenMasterCopy,
         bytes32 _collateralBranch,
         string question_,
         uint32 openingTs_,
@@ -74,11 +73,11 @@ contract ScalarEventProxy is Proxy, EventData, ScalarEventData {
 
         // Create an outcome token for each outcome
         // Create LongTokens    
-        OutcomeToken outcomeToken = OutcomeToken(new OutcomeTokenProxy(outcomeTokenMasterCopy, "LONG", string(abi.encodePacked("Long Token for Event ", questionId))));
+        OutcomeToken outcomeToken = new OutcomeToken("LONG", string(abi.encodePacked("Long Token for Event ", questionId)));
         outcomeTokens.push(outcomeToken);
         emit OutcomeTokenCreation(outcomeToken, 1);
         //create ShortTokens
-        outcomeToken = OutcomeToken(new OutcomeTokenProxy(outcomeTokenMasterCopy, "SHRT", string(abi.encodePacked("Short Token for Event ", questionId))));
+        outcomeToken = new OutcomeToken("SHRT", string(abi.encodePacked("Short Token for Event ", questionId)));
         outcomeTokens.push(outcomeToken);
         emit OutcomeTokenCreation(outcomeToken, 2);
             
@@ -93,7 +92,7 @@ contract ScalarEventProxy is Proxy, EventData, ScalarEventData {
 
 /// @title Scalar event contract - Scalar events resolve to a number within a range
 /// @author Stefan George - <stefan@gnosis.pm>
-contract ScalarEvent is Proxied, Event, ScalarEventData {
+contract ScalarEvent is Proxied, EventData, ScalarEventData {
     using Math for *;
 
     /*
@@ -102,6 +101,7 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
 
     bytes32 constant NULL_HASH = "";
     address constant NULL_ADDRESS = 0x0;
+
 
     function revokeOutcomeTokens()
         public
@@ -131,9 +131,10 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
         require(shortOutcomeTokenCount > 0 || longOutcomeTokenCount > 0, " first tokens must be revoked");
 
         //calculate the winnings
-        int outcome = 1;//getOutcome(branchForWithdraw, arbitrator);
+        int outcome = getOutcome(branchForWithdraw, arbitrator);
+
         // Outcome is lower than defined lower bound
-        uint convertedWinningOutcome = 0;
+        uint24 convertedWinningOutcome;
         if (outcome < lowerBound)
             convertedWinningOutcome = 0;
         // Outcome is higher than defined upper bound
@@ -144,12 +145,12 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
             convertedWinningOutcome = uint24(OUTCOME_RANGE * (outcome - lowerBound) / (upperBound - lowerBound));
         uint factorShort = OUTCOME_RANGE - convertedWinningOutcome;
         uint factorLong = OUTCOME_RANGE - factorShort;
-        winnings = shortOutcomeTokenCount.mul(factorShort).add(longOutcomeTokenCount.mul(factorLong)) / OUTCOME_RANGE;
+        winnings = (shortOutcomeTokenCount.mul(factorShort).add(longOutcomeTokenCount.mul(factorLong))) / OUTCOME_RANGE;
 
         // Payout winnings to sender
         require(!ForkonomicToken(forkonomicToken).hasBoxWithdrawal(msg.sender, NULL_HASH, branchForWithdraw, collateralBranch), "there had already been a withdrawal (redeemWinnings)"); 
         require(ForkonomicToken(forkonomicToken).boxTransfer(msg.sender, winnings, branchForWithdraw, NULL_HASH, NULL_HASH), "transfer went wrong (redeemWinnings)");
-        require(ForkonomicToken(forkonomicToken).recordBoxWithdrawal(NULL_HASH, winnings, branchForWithdraw), "withdrawal could not be recorded");
+        require(ForkonomicToken(forkonomicToken).recordBoxWithdrawal(msg.sender, NULL_HASH, winnings, branchForWithdraw), "withdrawal could not be recorded");
            
         emit WinningsRedemption(msg.sender, winnings, branchForWithdraw);
     }
@@ -170,6 +171,88 @@ contract ScalarEvent is Proxied, Event, ScalarEventData {
         returns (bytes32)
     {
         return keccak256(abi.encodePacked(collateralBranch, questionId, lowerBound, upperBound));
+    }
+
+
+    /*
+     *  Public functions
+     */
+    /// @dev Buys equal number of tokens of all outcomes, exchanging collateral tokens and sets of outcome tokens 1:1
+    /// @param collateralTokenCount Number of collateral tokens
+    function buyAllOutcomes(uint collateralTokenCount)
+        public
+    {
+        // Transfer collateral tokens to events contract
+        require(forkonomicToken.transferFrom(msg.sender, this, collateralTokenCount, collateralBranch), "transfer was not possible");
+        // Issue new outcome tokens to sender
+        for (uint8 i = 0; i < outcomeTokens.length; i++)
+            outcomeTokens[i].issue(msg.sender, collateralTokenCount);
+        emit OutcomeTokenSetIssuance(msg.sender, collateralTokenCount);
+    }
+
+    /// @dev Sells equal number of tokens of all outcomes, exchanging collateral tokens and sets of outcome tokens 1:1
+    /// @param outcomeTokenCount Number of outcome tokens
+    function sellAllOutcomes(uint outcomeTokenCount)
+        public
+    {  
+          // Revoke sender's outcome tokens of all outcomes
+        for (uint8 i = 0; i < outcomeTokens.length; i++)
+            outcomeTokens[i].revoke(msg.sender, outcomeTokenCount);
+        // Transfer collateral tokens to sender
+        require(forkonomicToken.transfer(msg.sender, outcomeTokenCount, collateralBranch), "transfer failed");
+        emit OutcomeTokenSetRevocation(msg.sender, outcomeTokenCount);
+    }
+
+ 
+    /// @dev gets winning event outcome
+    /// @param branch is the branch on which a user wants to know the result
+    function getOutcome(bytes32 branch, address arbitrator)
+        public
+        view
+        returns (int outcome)
+    {
+
+        // check that original branch is a father of executionbranch:
+        require(fSystem.isFatherOfBranch(collateralBranch, branch), " not a fahter branch");
+
+         // ensure that arbitrator is white-listed
+        require(fSystem.isArbitratorWhitelisted(arbitrator, branch), "arbitrator not white-listed");
+
+        require(fSystem.isBranchCreatedAfterTS(realityCheck.getFinalizeTS(questionId), branch), "branch is to old");
+
+        outcome = int(realityCheck.getFinalAnswerIfMatches(questionId, content_hash, arbitrator, minTimeout, minBond));
+    }
+
+    /// @dev Returns outcome count
+    /// @return Outcome count
+    function getOutcomeCount()
+        public
+        view
+        returns (uint8)
+    {
+        return uint8(outcomeTokens.length);
+    }
+
+    /// @dev Returns outcome tokens array
+    /// @return Outcome tokens
+    function getOutcomeTokens()
+        public
+        view
+        returns (OutcomeToken[])
+    {
+        return outcomeTokens;
+    }
+
+    /// @dev Returns the amount of outcome tokens held by owner
+    /// @return Outcome token distribution
+    function getOutcomeTokenDistribution(address owner)
+        public
+        view
+        returns (uint[] outcomeTokenDistribution)
+    {
+        outcomeTokenDistribution = new uint[](outcomeTokens.length);
+        for (uint8 i = 0; i < outcomeTokenDistribution.length; i++)
+            outcomeTokenDistribution[i] = outcomeTokens[i].balanceOf(owner);
     }
 
 }
