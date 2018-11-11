@@ -47,7 +47,7 @@ contract Event is Proxied, EventData {
         public
     {
         // Transfer collateral tokens to events contract
-        //require(forkonomicToken.transferFrom(msg.sender, this, collateralTokenCount, collateralBranch), "transfer was not possible");
+        require(forkonomicToken.transferFrom(msg.sender, this, collateralTokenCount, collateralBranch), "transfer was not possible");
         // Issue new outcome tokens to sender
         for (uint8 i = 0; i < outcomeTokens.length; i++)
             outcomeTokens[i].issue(msg.sender, collateralTokenCount);

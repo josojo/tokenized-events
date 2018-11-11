@@ -30,6 +30,8 @@
     "@gnosis.pm/util-contracts": "^0.2.10",
     "@josojo/forkonomics-contracts": "^0.1.11",
     "@realitio/realitio-contracts": "^2.0.1",
-    "minimist": "^1.2.0"
+    "minimist": "^1.2.0",
+    "truffle-contract": "^3.0.6",
+    "truffle-hdwallet-provider-privkey": "^0.3.0"
   }
 }

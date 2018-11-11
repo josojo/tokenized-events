@@ -1,8 +1,6 @@
 pragma solidity ^0.4.2;
 import '@josojo/forkonomics-contracts/contracts/Distribution.sol';
 import '@josojo/forkonomics-contracts/contracts/ForkonomicETTF.sol';
-import '@gnosis.pm/pm-contracts/contracts/Markets/StandardMarket.sol';
-import '@gnosis.pm/pm-contracts/contracts/MarketMakers/LMSRMarketMaker.sol';
 
 contract Migrations {
   address public owner;

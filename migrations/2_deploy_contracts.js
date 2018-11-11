@@ -46,6 +46,5 @@ module.exports = function(deployer, network, accounts) {
         maxBound))  // max-bound
   	.then(() => deployer.deploy(LMSRMarketMaker))
   	.then(() => deployer.deploy(StandardMarket, accounts[0], ScalarEventProxy.address, LMSRMarketMaker.address, 0))
-
 }
 
